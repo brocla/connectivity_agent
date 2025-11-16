@@ -44,6 +44,18 @@ def nslookup_tool(host: str) -> Dict[str, Any]:
         return {"host": host, "success": result.returncode == 0, "output": result.stdout.strip()}
     except Exception as e:
         return {"host": host, "error": str(e)}
+    
+def ipconfig_tool() -> Dict[str, Any]:
+    try:
+        result = subprocess.run(
+            ["ipconfig"],
+            capture_output=True,
+            text=True,
+            timeout=4
+        )
+        return { "success": result.returncode == 0, "output": result.stdout.strip()}
+    except Exception as e:
+        return { "error": str(e)}
 
 def calculator_tool(expression: str) -> Dict[str, Any]:
     try:
@@ -57,7 +69,7 @@ def weather_tool(city: str) -> Dict[str, Any]:
     data = {"Boise": "Sunny, 42°F", "Seattle": "Rainy, 48°F", "Salt Lake": "Clear, 38°F"}
     return {"weather": data.get(city, "No data for that location.")}
 
-TOOLS: Dict[str, Any] = {"ping": ping_tool, "nslookup": nslookup_tool, "calculate": calculator_tool, "weather": weather_tool}
+TOOLS: Dict[str, Any] = {"ping": ping_tool, "nslookup": nslookup_tool, "ipconfig": ipconfig_tool, "calculate": calculator_tool, "weather": weather_tool}
 
 # ---------------------------
 # TOOL DEFINITIONS
@@ -82,6 +94,16 @@ TOOLS_DEF: List[FunctionToolParam] = [
             "type": "object",
             "properties": {"host": {"type": "string"}},
             "required": ["host"],
+        },
+        "strict": False
+    },
+    {
+        "name": "ipconfig",
+        "type": "function",
+        "description": "Return the IP address, subnet mask and default gateway for each adapter bound to TCP/IP.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
         },
         "strict": False
     },
@@ -152,9 +174,9 @@ def run_agent() -> None:
                 model=MODEL,
                 input=input_queue,
                 tools=TOOLS_DEF,
-                previous_response_id=last_response_id , # type: ignore
+                previous_response_id=last_response_id , 
             )
-            print("[DEBUG] id:", response.id   )
+            # print("[DEBUG] id:", response.id)
             last_response_id = response.id 
 
             input_queue = []
@@ -178,14 +200,11 @@ def run_agent() -> None:
                     result = dispatch_tool(tool_name, args)
                     print(f"[Tool Result] {result}\n")
 
-                    # Feed tool result back as a system message
+                    # Feed tool result back to model
                     input_queue.append({
                         "type": "function_call_output",
                         "call_id": resp.call_id,
                         "output": str(result)
-                    #     "type": "input_text",
-                    #     # "role": "system",
-                    #     "text": f"Tool {tool_name} returned: {result}"
                     })
 
 # ---------------------------
