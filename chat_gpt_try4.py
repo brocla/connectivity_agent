@@ -5,14 +5,14 @@ from typing import List, Dict, Any, Optional, TypeAlias, TypedDict
 from openai import OpenAI
 from openai.types.responses import Response
 from openai.types.responses.function_tool_param import FunctionToolParam
-from openai.types.responses import ResponseInputParam, ResponseInputItemParam
+from openai.types.responses import ResponseInputParam
 
 # ---------------------------
 # GLOBALS
 # ---------------------------
-client = OpenAI()
-MODEL = "gpt-4.1-mini"
 Message = Dict[str, Any]
+MODEL = "gpt-4.1-mini"
+client = OpenAI()
 
 
 
@@ -24,6 +24,19 @@ def ping_tool(host: str) -> Dict[str, Any]:
     try:
         result = subprocess.run(
             ["ping", count_flag, "1", host],
+            capture_output=True,
+            text=True,
+            timeout=4
+        )
+        return {"host": host, "success": result.returncode == 0, "output": result.stdout.strip()}
+    except Exception as e:
+        return {"host": host, "error": str(e)}
+    
+
+def nslookup_tool(host: str) -> Dict[str, Any]:
+    try:
+        result = subprocess.run(
+            ["nslookup", host],
             capture_output=True,
             text=True,
             timeout=4
@@ -44,7 +57,7 @@ def weather_tool(city: str) -> Dict[str, Any]:
     data = {"Boise": "Sunny, 42°F", "Seattle": "Rainy, 48°F", "Salt Lake": "Clear, 38°F"}
     return {"weather": data.get(city, "No data for that location.")}
 
-TOOLS: Dict[str, Any] = {"ping": ping_tool, "calculate": calculator_tool, "weather": weather_tool}
+TOOLS: Dict[str, Any] = {"ping": ping_tool, "nslookup": nslookup_tool, "calculate": calculator_tool, "weather": weather_tool}
 
 # ---------------------------
 # TOOL DEFINITIONS
@@ -54,6 +67,17 @@ TOOLS_DEF: List[FunctionToolParam] = [
         "name": "ping",
         "type": "function",
         "description": "Ping a host to check network connectivity.",
+        "parameters": {
+            "type": "object",
+            "properties": {"host": {"type": "string"}},
+            "required": ["host"],
+        },
+        "strict": False
+    },
+    {
+        "name": "nslookup",
+        "type": "function",
+        "description": "Check if DNS is working.",
         "parameters": {
             "type": "object",
             "properties": {"host": {"type": "string"}},
@@ -85,7 +109,6 @@ TOOLS_DEF: List[FunctionToolParam] = [
     }
 ]
 
-
 # ---------------------------
 # HELPERS
 # ---------------------------
@@ -108,13 +131,11 @@ def dispatch_tool(tool_name: str|None, args: Dict[str, Any]) -> Dict[str, Any]:
 
 
 
-
-
 # ---------------------------
 # UNIFIED REPL LOOP
 # ---------------------------
 def run_agent() -> None:
-    conversation = None
+    last_response_id  = None
     print("🤖 AI Agent REPL — type 'exit' to quit.\n")
 
     while True:
@@ -131,9 +152,10 @@ def run_agent() -> None:
                 model=MODEL,
                 input=input_queue,
                 tools=TOOLS_DEF,
-                conversation=conversation # type: ignore
+                previous_response_id=last_response_id , # type: ignore
             )
-            conversation = response.conversation
+            print("[DEBUG] id:", response.id   )
+            last_response_id = response.id 
 
             input_queue = []
             for resp in getattr(response, "output", []):
@@ -158,9 +180,12 @@ def run_agent() -> None:
 
                     # Feed tool result back as a system message
                     input_queue.append({
-                        "type": "message",
-                        "role": "system",
-                        "content": f"Tool {tool_name} returned: {result}"
+                        "type": "function_call_output",
+                        "call_id": resp.call_id,
+                        "output": str(result)
+                    #     "type": "input_text",
+                    #     # "role": "system",
+                    #     "text": f"Tool {tool_name} returned: {result}"
                     })
 
 # ---------------------------
