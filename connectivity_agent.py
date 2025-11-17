@@ -1,7 +1,35 @@
+"""
+AI Connectivity Diagnostic Agent
+--------------------------------
+This module defines an interactive AI agent that diagnoses network connectivity
+issues by orchestrating system-level tools (ping, tracert, nslookup, ipconfig, etc.)
+through the OpenAI Responses API.
+
+Features
+--------
+- Provides a REPL loop where users can interact with the agent.
+- Executes system commands to test connectivity, routing, and DNS resolution.
+- Supports helper tools for math evaluation and mock weather data.
+- Demonstrates integration of function tools with AI responses.
+
+Usage
+-----
+Run directly from the command line:
+
+    python agent.py
+
+Then interact with the agent in the REPL:
+
+    >>> How is the connection to google ?
+    >>> Describe the connectivity to www.amazon.com. Be exhaustive.
+    >>> Which host has the faster connection, www.wikipedia.org or www.bing.com ?
+    >>> quit
+"""
+
 import subprocess
 import platform
 import json
-from typing import List, Dict, Any, Optional, TypeAlias, TypedDict
+from typing import List, Dict, Any
 from openai import OpenAI
 from openai.types.responses import Response
 from openai.types.responses.function_tool_param import FunctionToolParam
@@ -32,10 +60,14 @@ def ping_tool(host: str) -> Dict[str, Any]:
     except Exception as e:
         return {"host": host, "error": str(e)}
 
+
 def tracert_tool(host: str) -> Dict[str, Any]:
     try:
         result = subprocess.run(
-            ["tracert",  "-d -h 4 -w 2000", host], capture_output=True, text=True, timeout=20
+            ["tracert", "-d -h 4 -w 2000", host],
+            capture_output=True,
+            text=True,
+            timeout=20,
         )
         return {
             "host": host,
@@ -88,22 +120,7 @@ def ports_tool() -> Dict[str, Any]:
         return {"error": str(e)}
 
 
-def calculator_tool(expression: str) -> Dict[str, Any]:
-    try:
-        allowed = {"__builtins__": {}}
-        result = eval(expression, allowed, {})
-        return {"result": result}
-    except Exception as e:
-        return {"error": str(e)}
 
-
-def weather_tool(city: str) -> Dict[str, Any]:
-    data = {
-        "Boise": "Sunny, 42°F",
-        "Seattle": "Rainy, 48°F",
-        "Salt Lake": "Clear, 38°F",
-    }
-    return {"weather": data.get(city, "No data for that location.")}
 
 
 TOOLS: Dict[str, Any] = {
@@ -113,8 +130,7 @@ TOOLS: Dict[str, Any] = {
     "ipconfig": ipconfig_tool,
     "ports": ports_tool,
     "routing_table": routing_table_tool,
-    "calculate": calculator_tool,
-    "weather": weather_tool,
+
 }
 
 # ---------------------------
@@ -184,28 +200,6 @@ TOOLS_DEF: List[FunctionToolParam] = [
         },
         "strict": False,
     },
-    {
-        "name": "calculate",
-        "type": "function",
-        "description": "Evaluate a simple math expression.",
-        "parameters": {
-            "type": "object",
-            "properties": {"expression": {"type": "string"}},
-            "required": ["expression"],
-        },
-        "strict": False,
-    },
-    {
-        "name": "weather",
-        "type": "function",
-        "description": "Get fake weather for a city.",
-        "parameters": {
-            "type": "object",
-            "properties": {"city": {"type": "string"}},
-            "required": ["city"],
-        },
-        "strict": False,
-    },
 ]
 
 
@@ -213,6 +207,9 @@ TOOLS_DEF: List[FunctionToolParam] = [
 # HELPERS
 # ---------------------------
 def parse_tool_arguments(arg_string: str) -> Dict[str, Any]:
+    """
+    Parse a JSON string of tool arguments into a Python dictionary.
+    """
     if not arg_string:
         return {}
     try:
@@ -223,12 +220,31 @@ def parse_tool_arguments(arg_string: str) -> Dict[str, Any]:
 
 
 def dispatch_tool(tool_name: str | None, args: Dict[str, Any]) -> Dict[str, Any]:
+    """Dispatch a tool call to the appropriate function."""
+
     if tool_name not in TOOLS:
         return {"error": f"Unknown tool: {tool_name}"}
+
     try:
         return TOOLS[tool_name](**args)
     except Exception as e:
         return {"error": f"Tool execution failed: {e}"}
+
+
+def print_message(resp) -> None:
+    """Print a message from the model in a readable format."""
+    content_list = getattr(resp, "content", [])
+    if content_list and hasattr(content_list[0], "text"):
+        msg_text = content_list[0].text
+        print("\n🤖 Assistant:", msg_text)
+
+
+def get_call_params(resp):
+    """Extract tool call name and arguments from a function_call response block."""
+    tool_name = getattr(resp, "name", None)
+    raw_args = getattr(resp, "arguments", "{}")
+    args = raw_args if isinstance(raw_args, dict) else parse_tool_arguments(raw_args)
+    return tool_name, args
 
 
 # ---------------------------
@@ -246,7 +262,11 @@ def run_agent() -> None:
         # Start with user message
         input_queue: ResponseInputParam = [
             {"type": "message", "role": "user", "content": user_input},
-            {"type": "message", "role": "system", "content": "You are a helpful assistant that is expert in network connectivity."}
+            {
+                "type": "message",
+                "role": "system",
+                "content": "You are a helpful assistant that is expert in network connectivity.",
+            },
         ]
 
         # Loop until the model produces no more tool calls
@@ -257,7 +277,6 @@ def run_agent() -> None:
                 tools=TOOLS_DEF,
                 previous_response_id=last_response_id,
             )
-            # print("[DEBUG] id:", response.id)
             last_response_id = response.id
 
             input_queue = []
@@ -266,20 +285,11 @@ def run_agent() -> None:
 
                 # Regular assistant messages
                 if resp_type == "message":
-                    content_list = getattr(resp, "content", [])
-                    if content_list and hasattr(content_list[0], "text"):
-                        msg_text = content_list[0].text
-                        print("\n🤖 Assistant:", msg_text)
+                    print_message(resp)
 
                 # Tool / function calls
                 elif resp_type == "function_call":
-                    tool_name = getattr(resp, "name", None)
-                    raw_args = getattr(resp, "arguments", "{}")
-                    args = (
-                        raw_args
-                        if isinstance(raw_args, dict)
-                        else parse_tool_arguments(raw_args)
-                    )
+                    tool_name, args = get_call_params(resp)
 
                     print(f"\n[Tool Call] {tool_name}({args})")
                     result = dispatch_tool(tool_name, args)
