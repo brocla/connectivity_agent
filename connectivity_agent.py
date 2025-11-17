@@ -9,10 +9,9 @@ Features
 ........
 - Provides a REPL loop where users can interact with the agent.
 - Executes system commands to test connectivity, routing, and DNS resolution.
-- Supports helper tools for math evaluation and mock weather data.
-- Demonstrates integration of function tools with AI responses.
+- Demonstrates integration of tools with AI responses.
 
-- An OpenAI API key is required to run this code.
+- NOTE! An OpenAI API key is required to run this code.
 
 Usage
 .....
@@ -28,8 +27,8 @@ Then interact with the agent in the REPL:
     >>> exit
 """
 
-import subprocess
 import json
+import subprocess
 from functools import partial
 from typing import List, Dict, Any
 from openai import OpenAI
@@ -47,13 +46,17 @@ MODEL = "gpt-5.1"
 #     "gpt-4.1-mini"
 
 Message = Dict[str, Any]
+Tool_Result = Dict[str, Any]
+Tool_Args = Dict[str, Any]
+Tool_Name = str | None
+
 client = OpenAI()
 
 
 # ...........................
 # TOOL HELPER
 # ...........................
-def run_command(func_call: List[str], host: str | None = None, timeout: int | None = None) -> Dict[str, Any]:
+def run_command(func_call: List[str], host: str | None = None, timeout: int | None = None) -> Tool_Result:
     """
     Run a command-line tool with optional host argument.
 
@@ -93,18 +96,9 @@ def run_command(func_call: List[str], host: str | None = None, timeout: int | No
             error["host"] = host
         return error
 
-# ...........................
-# TOOLS
-# ...........................
-# ping_tool = partial(run_command, ["ping", "-n", "4"])  # linux use "-c"
-# ports_tool = partial(run_command, ["netstat", "-an"])
-# tracert_tool = partial(run_command, ["tracert", "-d", "-h", "4", "-w", "2000"])
-# nslookup_tool = partial(run_command, ["nslookup"])
-# ipconfig_tool = partial(run_command, ["ipconfig"])
-# routing_table_tool = partial(run_command, ["netstat", "-r"])
-
-
-# Mapping of tool names to their implementations
+# .............................................
+# TOOL FUNCTIONS, mapped to their tool names
+# .............................................
 TOOLS: Dict[str, Any] = {
     "ping": partial(run_command, ["ping", "-n", "4"]),  # linux use "-c"
     "curl": partial(run_command, ["curl", "-I"]),
@@ -114,17 +108,9 @@ TOOLS: Dict[str, Any] = {
     "ipconfig": partial(run_command, ["ipconfig"]),
     "routing_table": partial(run_command, ["netstat", "-r"]),
 }
-# TOOLS: Dict[str, Any] = {
-#     "ping": ping_tool,
-#     "ports": ports_tool,
-#     "tracert": tracert_tool,
-#     "nslookup": nslookup_tool,
-#     "ipconfig": ipconfig_tool,
-#     "routing_table": routing_table_tool,
-# }
 
 # ...........................
-# TOOL DEFINITIONS
+# TOOL DEFINITIONS for agent
 # ...........................
 TOOLS_DEF: List[FunctionToolParam] = [
     {
@@ -207,7 +193,7 @@ TOOLS_DEF: List[FunctionToolParam] = [
 # ...........................
 # AGENT HELPERS
 # ...........................
-def parse_tool_arguments(arg_string: str) -> Dict[str, Any]:
+def parse_tool_arguments(arg_string: str) -> Tool_Args:
     """
     Parse a JSON string of tool arguments into a Python dictionary.
     """
@@ -220,7 +206,7 @@ def parse_tool_arguments(arg_string: str) -> Dict[str, Any]:
         return {}
 
 
-def dispatch_tool(tool_name: str | None, args: Dict[str, Any]) -> Dict[str, Any]:
+def dispatch_tool(tool_name: Tool_Name, args: Tool_Args) -> Tool_Result:
     """Dispatch a tool call to the appropriate function."""
 
     if tool_name not in TOOLS:
@@ -233,15 +219,15 @@ def dispatch_tool(tool_name: str | None, args: Dict[str, Any]) -> Dict[str, Any]
 
 
 def print_message(resp: ResponseOutputItem) -> None:
-    """Print a message from the model in a readable format."""
+    """Print a message from the agent."""
     content_list = getattr(resp, "content", [])
     if content_list and hasattr(content_list[0], "text"):
         msg_text = content_list[0].text
         print("\n🤖 Assistant:", msg_text)
 
 
-def get_call_params(resp: ResponseOutputItem) -> tuple[str | None, Dict[str, Any]]:
-    """Extract tool call name and arguments from a function_call response block."""
+def get_call_params(resp: ResponseOutputItem) -> tuple[Tool_Name, Tool_Args]:
+    """Extract tool name and arguments from a response output item."""
     tool_name = getattr(resp, "name", None)
     raw_args = getattr(resp, "arguments", "{}")
     args = raw_args if isinstance(raw_args, dict) else parse_tool_arguments(raw_args)
@@ -264,7 +250,7 @@ def run_agent() -> None:
             {"type": "message", "role": "user", "content": user_input},
         ]
 
-        # Loop until the model produces no more tool calls
+        # Process until the agent requests no more tool calls and produces no more messages
         while input_queue:
             response: Response = client.responses.create(
                 model=MODEL,
@@ -272,17 +258,17 @@ def run_agent() -> None:
                 tools=TOOLS_DEF,
                 previous_response_id=last_response_id,
             )
-            last_response_id = response.id
+            last_response_id = response.id # chaining response ids creates a short-term memory effect for better conversation
 
             input_queue = []
             for resp in getattr(response, "output", []):
                 resp_type = getattr(resp, "type", None)
 
-                # Print regular assistant messages
+                # Print the agent's messages
                 if resp_type == "message":
                     print_message(resp)
 
-                # Call a Tool
+                # Call a tool for the agent
                 elif resp_type == "function_call":
                     tool_name, args = get_call_params(resp)
 
@@ -290,7 +276,7 @@ def run_agent() -> None:
                     result = dispatch_tool(tool_name, args)
                     print(f"[DEBUG: Tool Result] {result}\n")
 
-                    # Feed tool result back to model
+                    # Feed tool result back to the agent
                     input_queue.append(
                         {
                             "type": "function_call_output",
