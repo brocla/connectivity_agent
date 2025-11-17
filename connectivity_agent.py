@@ -23,7 +23,7 @@ Then interact with the agent in the REPL:
 
     >>> How is the connection to google ?
     >>> Describe the connectivity to www.amazon.com. Be exhaustive.
-    >>> Which host has the faster connection, www.wikipedia.org or www.bing.com ?
+    >>> Which of these AWS hosts has the better response time, https://s3.us-east-1.amazonaws.com or https://s3.us-west-1.amazonaws.com ?
     >>> exit
 """
 
@@ -56,28 +56,20 @@ client = OpenAI()
 # ...........................
 # TOOL HELPER
 # ...........................
-def run_command(func_call: List[str], host: str | None = None, timeout: int | None = None) -> Tool_Result:
+def run_command(
+    func_call: List[str], host: str | None = None, timeout: int | None = None
+) -> Tool_Result:
     """
     Run a command-line tool with optional host argument.
 
     Parameters
-    ..........
-    func_call : list of str
-        The base command and flags to execute.
-    host : str, optional
-        Hostname or IP address to append to the command.
-    timeout : int, optional
-        Timeout in seconds. Defaults to 8 if host is provided, else 4.
-
-    Returns
-    .......
-    dict
-        Result dictionary containing:
-        - 'success': True if command succeeded, False otherwise
-        - 'output': stdout from the command
-        - 'error': error message if execution failed
-        - 'host': included only if a host argument was provided
-    """
+        func_call : list of str
+            The base command and flags to execute.
+        host : str, optional
+            Hostname or IP address to append to the command.
+        timeout : int, optional
+            Timeout in seconds. Defaults to 8 if host is provided, else 4.
+   """
     if host:
         func_call = func_call + [host]
     if timeout is None:
@@ -85,7 +77,9 @@ def run_command(func_call: List[str], host: str | None = None, timeout: int | No
 
     try:
         print(f"[DEBUG: Run_Command]  {' '.join(func_call)} with timeout {timeout}s")
-        result = subprocess.run(func_call, capture_output=True, text=True, timeout=timeout)
+        result = subprocess.run(
+            func_call, capture_output=True, text=True, timeout=timeout
+        )
         output = {"success": result.returncode == 0, "output": result.stdout.strip()}
         if host:
             output["host"] = host
@@ -95,6 +89,7 @@ def run_command(func_call: List[str], host: str | None = None, timeout: int | No
         if host:
             error["host"] = host
         return error
+
 
 # .............................................
 # TOOL FUNCTIONS, mapped to their tool names
@@ -238,7 +233,19 @@ def get_call_params(resp: ResponseOutputItem) -> tuple[Tool_Name, Tool_Args]:
 #  AGENT REPL
 # ...........................
 def run_agent() -> None:
-    last_response_id = None
+
+    # Prime the agent with instuctions. (Cannot detect that this make a difference.)
+    response = client.responses.create(
+        model=MODEL,
+        input=[
+            {
+                "role": "system",
+                "content": "You are an agent, expert in diagnosing network connectivity. You have a suite of network diagnostic tools.",
+            }
+        ],
+    )
+    last_response_id = response.id
+
     print("🤖 AI Connectivity Agent — type 'exit' to quit.\n")
 
     while True:
@@ -258,7 +265,9 @@ def run_agent() -> None:
                 tools=TOOLS_DEF,
                 previous_response_id=last_response_id,
             )
-            last_response_id = response.id # chaining response ids creates a short-term memory effect for better conversation
+            last_response_id = (
+                response.id
+            )  # chaining response ids creates a short-term memory effect for better conversation
 
             input_queue = []
             for resp in getattr(response, "output", []):
