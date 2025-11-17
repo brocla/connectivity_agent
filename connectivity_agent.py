@@ -12,6 +12,8 @@ Features
 - Supports helper tools for math evaluation and mock weather data.
 - Demonstrates integration of function tools with AI responses.
 
+- An OpenAI API key is required to run this code.
+
 Usage
 -----
 Run directly from the command line:
@@ -23,7 +25,7 @@ Then interact with the agent in the REPL:
     >>> How is the connection to google ?
     >>> Describe the connectivity to www.amazon.com. Be exhaustive.
     >>> Which host has the faster connection, www.wikipedia.org or www.bing.com ?
-    >>> quit
+    >>> exit
 """
 
 import subprocess
@@ -31,15 +33,14 @@ import platform
 import json
 from typing import List, Dict, Any
 from openai import OpenAI
-from openai.types.responses import Response
+from openai.types.responses import Response, ResponseInputParam, ResponseOutputItem
 from openai.types.responses.function_tool_param import FunctionToolParam
-from openai.types.responses import ResponseInputParam
 
 # ---------------------------
 # GLOBALS
 # ---------------------------
 Message = Dict[str, Any]
-MODEL = "gpt-4.1-mini"
+MODEL = "gpt-5.1"
 client = OpenAI()
 
 
@@ -47,41 +48,28 @@ client = OpenAI()
 # TOOLS
 # ---------------------------
 def ping_tool(host: str) -> Dict[str, Any]:
-    count_flag = "-n" if platform.system().lower() == "windows" else "-c"
-    try:
-        result = subprocess.run(
-            ["ping", count_flag, "1", host], capture_output=True, text=True, timeout=4
-        )
-        return {
-            "host": host,
-            "success": result.returncode == 0,
-            "output": result.stdout.strip(),
-        }
-    except Exception as e:
-        return {"host": host, "error": str(e)}
-
+    return one_arg(["ping", "-n", "1"], host)
 
 def tracert_tool(host: str) -> Dict[str, Any]:
-    try:
-        result = subprocess.run(
-            ["tracert", "-d -h 4 -w 2000", host],
-            capture_output=True,
-            text=True,
-            timeout=20,
-        )
-        return {
-            "host": host,
-            "success": result.returncode == 0,
-            "output": result.stdout.strip(),
-        }
-    except Exception as e:
-        return {"host": host, "error": str(e)}
-
+    return one_arg(["tracert", "-d -h 4 -w 2000"], host)
 
 def nslookup_tool(host: str) -> Dict[str, Any]:
+    return one_arg(["nslookup"], host)
+
+def ipconfig_tool() -> Dict[str, Any]:
+    return no_args(["ipconfig"])
+
+def routing_table_tool() -> Dict[str, Any]:
+    return no_args(["netstat", "-r"])
+
+def ports_tool() -> Dict[str, Any]:
+    return no_args(["netstat", "-an"])
+
+def one_arg(func_call: List[str], host: str) -> Dict[str, Any]:
+    func_call.append(host)
     try:
         result = subprocess.run(
-            ["nslookup", host], capture_output=True, text=True, timeout=4
+           func_call, capture_output=True, text=True, timeout=4
         )
         return {
             "host": host,
@@ -91,38 +79,14 @@ def nslookup_tool(host: str) -> Dict[str, Any]:
     except Exception as e:
         return {"host": host, "error": str(e)}
 
-
-def ipconfig_tool() -> Dict[str, Any]:
+def no_args(func_call: List[str]) -> Dict[str, Any]:
     try:
-        result = subprocess.run(["ipconfig"], capture_output=True, text=True, timeout=4)
+        result = subprocess.run(func_call, capture_output=True, text=True, timeout=4)
         return {"success": result.returncode == 0, "output": result.stdout.strip()}
     except Exception as e:
         return {"error": str(e)}
-
-
-def routing_table_tool() -> Dict[str, Any]:
-    try:
-        result = subprocess.run(
-            ["netstat", "-r"], capture_output=True, text=True, timeout=4
-        )
-        return {"success": result.returncode == 0, "output": result.stdout.strip()}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-def ports_tool() -> Dict[str, Any]:
-    try:
-        result = subprocess.run(
-            ["netstat", "-an"], capture_output=True, text=True, timeout=4
-        )
-        return {"success": result.returncode == 0, "output": result.stdout.strip()}
-    except Exception as e:
-        return {"error": str(e)}
-
-
-
-
-
+    
+# Mapping of tool names to their implementations
 TOOLS: Dict[str, Any] = {
     "ping": ping_tool,
     "tracert": tracert_tool,
@@ -130,7 +94,6 @@ TOOLS: Dict[str, Any] = {
     "ipconfig": ipconfig_tool,
     "ports": ports_tool,
     "routing_table": routing_table_tool,
-
 }
 
 # ---------------------------
@@ -231,7 +194,7 @@ def dispatch_tool(tool_name: str | None, args: Dict[str, Any]) -> Dict[str, Any]
         return {"error": f"Tool execution failed: {e}"}
 
 
-def print_message(resp) -> None:
+def print_message(resp: ResponseOutputItem) -> None:
     """Print a message from the model in a readable format."""
     content_list = getattr(resp, "content", [])
     if content_list and hasattr(content_list[0], "text"):
@@ -239,7 +202,7 @@ def print_message(resp) -> None:
         print("\n🤖 Assistant:", msg_text)
 
 
-def get_call_params(resp):
+def get_call_params(resp: ResponseOutputItem) -> tuple[str | None, Dict[str, Any]]:
     """Extract tool call name and arguments from a function_call response block."""
     tool_name = getattr(resp, "name", None)
     raw_args = getattr(resp, "arguments", "{}")
