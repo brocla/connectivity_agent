@@ -1,12 +1,12 @@
 """
 AI Connectivity Diagnostic Agent
---------------------------------
+................................
 This module defines an interactive AI agent that diagnoses network connectivity
 issues by orchestrating system-level tools (ping, tracert, nslookup, ipconfig, etc.)
 through the OpenAI Responses API.
 
 Features
---------
+........
 - Provides a REPL loop where users can interact with the agent.
 - Executes system commands to test connectivity, routing, and DNS resolution.
 - Supports helper tools for math evaluation and mock weather data.
@@ -15,7 +15,7 @@ Features
 - An OpenAI API key is required to run this code.
 
 Usage
------
+.....
 Run directly from the command line:
 
     python agent.py
@@ -36,9 +36,9 @@ from openai import OpenAI
 from openai.types.responses import Response, ResponseInputParam, ResponseOutputItem
 from openai.types.responses.function_tool_param import FunctionToolParam
 
-# ---------------------------
+# ...........................
 # GLOBALS
-# ---------------------------
+# ...........................
 MODEL = "gpt-5.1"
 # Valid Model Options:
 #     "gpt-5.1"
@@ -50,19 +50,15 @@ Message = Dict[str, Any]
 client = OpenAI()
 
 
-# ---------------------------
-# TOOLS
-# ---------------------------
-
-from typing import List, Dict, Any
-import subprocess
-
+# ...........................
+# TOOL HELPER
+# ...........................
 def run_command(func_call: List[str], host: str | None = None, timeout: int | None = None) -> Dict[str, Any]:
     """
     Run a command-line tool with optional host argument.
 
     Parameters
-    ----------
+    ..........
     func_call : list of str
         The base command and flags to execute.
     host : str, optional
@@ -71,7 +67,7 @@ def run_command(func_call: List[str], host: str | None = None, timeout: int | No
         Timeout in seconds. Defaults to 8 if host is provided, else 4.
 
     Returns
-    -------
+    .......
     dict
         Result dictionary containing:
         - 'success': True if command succeeded, False otherwise
@@ -85,6 +81,7 @@ def run_command(func_call: List[str], host: str | None = None, timeout: int | No
         timeout = 8 if host else 4
 
     try:
+        print(f"[DEBUG: Run_Command]  {' '.join(func_call)} with timeout {timeout}s")
         result = subprocess.run(func_call, capture_output=True, text=True, timeout=timeout)
         output = {"success": result.returncode == 0, "output": result.stdout.strip()}
         if host:
@@ -96,33 +93,55 @@ def run_command(func_call: List[str], host: str | None = None, timeout: int | No
             error["host"] = host
         return error
 
-
-ping_tool = partial(run_command, ["ping", "-n", "4"])  # linux use "-c"
-ports_tool = partial(run_command, ["netstat", "-an"])
-tracert_tool = partial(run_command, ["tracert", "-d", "-h", "4", "-w", "2000"])
-nslookup_tool = partial(run_command, ["nslookup"])
-ipconfig_tool = partial(run_command, ["ipconfig"])
-routing_table_tool = partial(run_command, ["netstat", "-r"])
+# ...........................
+# TOOLS
+# ...........................
+# ping_tool = partial(run_command, ["ping", "-n", "4"])  # linux use "-c"
+# ports_tool = partial(run_command, ["netstat", "-an"])
+# tracert_tool = partial(run_command, ["tracert", "-d", "-h", "4", "-w", "2000"])
+# nslookup_tool = partial(run_command, ["nslookup"])
+# ipconfig_tool = partial(run_command, ["ipconfig"])
+# routing_table_tool = partial(run_command, ["netstat", "-r"])
 
 
 # Mapping of tool names to their implementations
 TOOLS: Dict[str, Any] = {
-    "ping": ping_tool,
-    "tracert": tracert_tool,
-    "nslookup": nslookup_tool,
-    "ipconfig": ipconfig_tool,
-    "ports": ports_tool,
-    "routing_table": routing_table_tool,
+    "ping": partial(run_command, ["ping", "-n", "4"]),  # linux use "-c"
+    "curl": partial(run_command, ["curl", "-I"]),
+    "ports": partial(run_command, ["netstat", "-an"]),
+    "tracert": partial(run_command, ["tracert", "-d", "-h", "4", "-w", "2000"]),
+    "nslookup": partial(run_command, ["nslookup"]),
+    "ipconfig": partial(run_command, ["ipconfig"]),
+    "routing_table": partial(run_command, ["netstat", "-r"]),
 }
+# TOOLS: Dict[str, Any] = {
+#     "ping": ping_tool,
+#     "ports": ports_tool,
+#     "tracert": tracert_tool,
+#     "nslookup": nslookup_tool,
+#     "ipconfig": ipconfig_tool,
+#     "routing_table": routing_table_tool,
+# }
 
-# ---------------------------
+# ...........................
 # TOOL DEFINITIONS
-# ---------------------------
+# ...........................
 TOOLS_DEF: List[FunctionToolParam] = [
     {
         "name": "ping",
         "type": "function",
         "description": "Ping a host to check network connectivity.",
+        "parameters": {
+            "type": "object",
+            "properties": {"host": {"type": "string"}},
+            "required": ["host"],
+        },
+        "strict": False,
+    },
+    {
+        "name": "curl",
+        "type": "function",
+        "description": "fetch the HTTP headers from a host.",
         "parameters": {
             "type": "object",
             "properties": {"host": {"type": "string"}},
@@ -185,9 +204,9 @@ TOOLS_DEF: List[FunctionToolParam] = [
 ]
 
 
-# ---------------------------
-# HELPERS
-# ---------------------------
+# ...........................
+# AGENT HELPERS
+# ...........................
 def parse_tool_arguments(arg_string: str) -> Dict[str, Any]:
     """
     Parse a JSON string of tool arguments into a Python dictionary.
@@ -229,12 +248,12 @@ def get_call_params(resp: ResponseOutputItem) -> tuple[str | None, Dict[str, Any
     return tool_name, args
 
 
-# ---------------------------
-# REPL AGENT
-# ---------------------------
+# ...........................
+#  AGENT REPL
+# ...........................
 def run_agent() -> None:
     last_response_id = None
-    print("🤖 AI Agent REPL — type 'exit' to quit.\n")
+    print("🤖 AI Connectivity Agent — type 'exit' to quit.\n")
 
     while True:
         user_input = input(">>> ").strip()
