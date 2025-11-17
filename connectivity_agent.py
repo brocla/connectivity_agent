@@ -29,8 +29,8 @@ Then interact with the agent in the REPL:
 """
 
 import subprocess
-import platform
 import json
+from functools import partial
 from typing import List, Dict, Any
 from openai import OpenAI
 from openai.types.responses import Response, ResponseInputParam, ResponseOutputItem
@@ -39,53 +39,72 @@ from openai.types.responses.function_tool_param import FunctionToolParam
 # ---------------------------
 # GLOBALS
 # ---------------------------
-Message = Dict[str, Any]
 MODEL = "gpt-5.1"
+# Valid Model Options:
+#     "gpt-5.1"
+#     "gpt-5.1-mini"
+#     "gpt-4.1"
+#     "gpt-4.1-mini"
+
+Message = Dict[str, Any]
 client = OpenAI()
 
 
 # ---------------------------
 # TOOLS
 # ---------------------------
-def ping_tool(host: str) -> Dict[str, Any]:
-    return one_arg(["ping", "-n", "1"], host)
 
-def tracert_tool(host: str) -> Dict[str, Any]:
-    return one_arg(["tracert", "-d -h 4 -w 2000"], host)
+from typing import List, Dict, Any
+import subprocess
 
-def nslookup_tool(host: str) -> Dict[str, Any]:
-    return one_arg(["nslookup"], host)
+def run_command(func_call: List[str], host: str | None = None, timeout: int | None = None) -> Dict[str, Any]:
+    """
+    Run a command-line tool with optional host argument.
 
-def ipconfig_tool() -> Dict[str, Any]:
-    return no_args(["ipconfig"])
+    Parameters
+    ----------
+    func_call : list of str
+        The base command and flags to execute.
+    host : str, optional
+        Hostname or IP address to append to the command.
+    timeout : int, optional
+        Timeout in seconds. Defaults to 8 if host is provided, else 4.
 
-def routing_table_tool() -> Dict[str, Any]:
-    return no_args(["netstat", "-r"])
+    Returns
+    -------
+    dict
+        Result dictionary containing:
+        - 'success': True if command succeeded, False otherwise
+        - 'output': stdout from the command
+        - 'error': error message if execution failed
+        - 'host': included only if a host argument was provided
+    """
+    if host:
+        func_call = func_call + [host]
+    if timeout is None:
+        timeout = 8 if host else 4
 
-def ports_tool() -> Dict[str, Any]:
-    return no_args(["netstat", "-an"])
-
-def one_arg(func_call: List[str], host: str) -> Dict[str, Any]:
-    func_call.append(host)
     try:
-        result = subprocess.run(
-           func_call, capture_output=True, text=True, timeout=4
-        )
-        return {
-            "host": host,
-            "success": result.returncode == 0,
-            "output": result.stdout.strip(),
-        }
+        result = subprocess.run(func_call, capture_output=True, text=True, timeout=timeout)
+        output = {"success": result.returncode == 0, "output": result.stdout.strip()}
+        if host:
+            output["host"] = host
+        return output
     except Exception as e:
-        return {"host": host, "error": str(e)}
+        error = {"error": str(e)}
+        if host:
+            error["host"] = host
+        return error
 
-def no_args(func_call: List[str]) -> Dict[str, Any]:
-    try:
-        result = subprocess.run(func_call, capture_output=True, text=True, timeout=4)
-        return {"success": result.returncode == 0, "output": result.stdout.strip()}
-    except Exception as e:
-        return {"error": str(e)}
-    
+
+ping_tool = partial(run_command, ["ping", "-n", "4"])  # linux use "-c"
+ports_tool = partial(run_command, ["netstat", "-an"])
+tracert_tool = partial(run_command, ["tracert", "-d", "-h", "4", "-w", "2000"])
+nslookup_tool = partial(run_command, ["nslookup"])
+ipconfig_tool = partial(run_command, ["ipconfig"])
+routing_table_tool = partial(run_command, ["netstat", "-r"])
+
+
 # Mapping of tool names to their implementations
 TOOLS: Dict[str, Any] = {
     "ping": ping_tool,
@@ -211,7 +230,7 @@ def get_call_params(resp: ResponseOutputItem) -> tuple[str | None, Dict[str, Any
 
 
 # ---------------------------
-# UNIFIED REPL LOOP
+# REPL AGENT
 # ---------------------------
 def run_agent() -> None:
     last_response_id = None
@@ -222,14 +241,8 @@ def run_agent() -> None:
         if user_input.lower() in ["exit", "quit"]:
             break
 
-        # Start with user message
         input_queue: ResponseInputParam = [
             {"type": "message", "role": "user", "content": user_input},
-            {
-                "type": "message",
-                "role": "system",
-                "content": "You are a helpful assistant that is expert in network connectivity.",
-            },
         ]
 
         # Loop until the model produces no more tool calls
@@ -246,17 +259,17 @@ def run_agent() -> None:
             for resp in getattr(response, "output", []):
                 resp_type = getattr(resp, "type", None)
 
-                # Regular assistant messages
+                # Print regular assistant messages
                 if resp_type == "message":
                     print_message(resp)
 
-                # Tool / function calls
+                # Call a Tool
                 elif resp_type == "function_call":
                     tool_name, args = get_call_params(resp)
 
-                    print(f"\n[Tool Call] {tool_name}({args})")
+                    print(f"\n[DEBUG: Tool Call] {tool_name}({args})")
                     result = dispatch_tool(tool_name, args)
-                    print(f"[Tool Result] {result}\n")
+                    print(f"[DEBUG: Tool Result] {result}\n")
 
                     # Feed tool result back to model
                     input_queue.append(
@@ -268,8 +281,5 @@ def run_agent() -> None:
                     )
 
 
-# ---------------------------
-# RUN
-# ---------------------------
 if __name__ == "__main__":
     run_agent()
