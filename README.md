@@ -33,3 +33,7 @@ If you're learning the Responses API or experimenting with AI agents that use mu
 \>> Describe the connectivity to www.amazon.com. Be exhaustive.
 
 \>> Compare response times between AWS on the East and West coast.
+
+
+## Kudos
+Thanks to Thomas Ptacek for his article [You Should Write an Agent](https://fly.io/blog/everyone-write-an-agent/?utm_source=www.pythonweekly.com&utm_medium=newsletter&utm_campaign=python-weekly-issue-722-november-13-2025&_bhlid=67fb3628f293fe779bb6f37f8e5ce33d85d11b38)
