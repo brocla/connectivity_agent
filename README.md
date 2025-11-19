@@ -60,7 +60,7 @@ If you're learning the Responses API or experimenting with AI agents that use mu
 
 ## Installation
 
-### Installing from PyPI (Coming Soon)
+### Installing from PyPI
 
 Once published, you can install the package directly:
 
