@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "connectivity-agent"
-version = "0.1.1"
+version = "0.1.2"
 description = "An AI agent that diagnoses network connectivity issues using OpenAI's Responses API"
 readme = "README.md"
 requires-python = ">=3.10"
