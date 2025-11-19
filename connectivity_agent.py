@@ -28,6 +28,7 @@ Then interact with the agent in the REPL:
 """
 
 import json
+import platform
 import subprocess
 from functools import partial
 from typing import List, Dict, Any
@@ -69,17 +70,15 @@ def run_command(
             Hostname or IP address to append to the command.
         timeout : int, optional
             Timeout in seconds. Defaults to 8 if host is provided, else 4.
-   """
+    """
     if host:
         func_call = func_call + [host]
     if timeout is None:
         timeout = 8 if host else 4
 
     try:
-        print(f"[DEBUG: Run_Command]  {' '.join(func_call)} with timeout {timeout}s")
-        result = subprocess.run(
-            func_call, capture_output=True, text=True, timeout=timeout
-        )
+        # print(f"[DEBUG: Run_Command]  {' '.join(func_call)} with timeout {timeout}s")
+        result = subprocess.run(func_call, capture_output=True, text=True, timeout=timeout)
         output = {"success": result.returncode == 0, "output": result.stdout.strip()}
         if host:
             output["host"] = host
@@ -92,17 +91,37 @@ def run_command(
 
 
 # .............................................
-# TOOL FUNCTIONS, mapped to their tool names
+# TOOL FUNCTIONS, mapped to their tool names, by operating system
 # .............................................
 TOOLS: Dict[str, Any] = {
-    "ping": partial(run_command, ["ping", "-n", "4"]),  # linux use "-c"
-    "curl": partial(run_command, ["curl", "-I"]),
-    "ports": partial(run_command, ["netstat", "-an"]),
-    "tracert": partial(run_command, ["tracert", "-d", "-h", "4", "-w", "2000"]),
-    "nslookup": partial(run_command, ["nslookup"]),
-    "ipconfig": partial(run_command, ["ipconfig"]),
-    "routing_table": partial(run_command, ["netstat", "-r"]),
-}
+    "windows": {
+        "ping": partial(run_command, ["ping", "-n", "4"]),
+        "curl": partial(run_command, ["curl", "-I"]),
+        "ports": partial(run_command, ["netstat", "-an"]),
+        "tracert": partial(run_command, ["tracert", "-d", "-h", "8", "-w", "2000"], timeout=15),
+        "nslookup": partial(run_command, ["nslookup"]),
+        "ipconfig": partial(run_command, ["ipconfig"]),
+        "routing_table": partial(run_command, ["netstat", "-r"]),
+    },
+    "darwin": {
+        "ping": partial(run_command, ["ping", "-c", "4"]),
+        "curl": partial(run_command, ["curl", "-I"]),
+        "ports": partial(run_command, ["lsof", "-i", "-n", "-P"]),
+        "tracert": partial(run_command, ["traceroute", "-n", "-m", "8", "-w", "2"], timeout=15),
+        "nslookup": partial(run_command, ["nslookup"]),
+        "ipconfig": partial(run_command, ["ifconfig"]),
+        "routing_table": partial(run_command, ["netstat", "-r"]),
+    },
+    "linux": {
+        "ping": partial(run_command, ["ping", "-c", "4"]),
+        "curl": partial(run_command, ["curl", "-I"]),
+        "ports": partial(run_command, ["ss", "-an"]),
+        "tracert": partial(run_command, ["traceroute", "-n", "-m", "8", "-w", "2"], timeout=15),
+        "nslookup": partial(run_command, ["nslookup"]),
+        "ipconfig": partial(run_command, ["ip", "addr"]),
+        "routing_table": partial(run_command, ["ip", "route", "show"]),
+    },
+}.get(platform.system().lower(), {})
 
 # ...........................
 # TOOL DEFINITIONS for agent
@@ -281,9 +300,9 @@ def run_agent() -> None:
                 elif resp_type == "function_call":
                     tool_name, args = get_call_params(resp)
 
-                    print(f"\n[DEBUG: Tool Call] {tool_name}({args})")
+                    # print(f"\n[DEBUG: Tool Call] {tool_name}({args})")
                     result = dispatch_tool(tool_name, args)
-                    print(f"[DEBUG: Tool Result] {result}\n")
+                    # print(f"[DEBUG: Tool Result] {result}\n")
 
                     # Feed tool result back to the agent
                     input_queue.append(
