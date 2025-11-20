@@ -115,7 +115,7 @@ TOOLS: Dict[str, Any] = {
     "linux": {
         "ping": partial(run_command, ["ping", "-c", "4"]),
         "curl": partial(run_command, ["curl", "-I"]),
-        "ports": partial(run_command, ["ss", "-an"]),
+        "ports": partial(run_command, ["ss", "-ant"]),
         "tracert": partial(run_command, ["traceroute", "-n", "-m", "8", "-w", "2"], timeout=15),
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ip", "addr"]),
