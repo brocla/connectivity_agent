@@ -90,6 +90,29 @@ def run_command(
         return error
 
 
+def self_diagnostic() -> Tool_Result:
+    """
+    A self-diagnostic tool that checks if all other tools are available.
+    """
+    diagnostics = {}
+    for tool_name, tool_func in TOOLS.items():
+        if tool_name == "self_diagnostic":
+            continue
+        [tool_def] = [td for td in TOOLS_DEFS if td["name"] == tool_name]
+        host_required = tool_def["parameters"].get("required", []) == ["host"]
+        try:
+            result = tool_func(host="localhost") if host_required else tool_func()
+            diagnostics[tool_name] = {
+                "available": True,
+                "test_result": result,
+            }
+        except Exception as e:
+            diagnostics[tool_name] = {
+                "available": False,
+                "error": str(e),
+            }
+    return diagnostics
+
 # .............................................
 # TOOL FUNCTIONS, mapped to their tool names, by operating system
 # .............................................
@@ -102,6 +125,7 @@ TOOLS: Dict[str, Any] = {
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ipconfig"]),
         "routing_table": partial(run_command, ["netstat", "-r"]),
+        "self_diagnostic": self_diagnostic,
     },
     "darwin": {
         "ping": partial(run_command, ["ping", "-c", "4"]),
@@ -111,6 +135,7 @@ TOOLS: Dict[str, Any] = {
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ifconfig"]),
         "routing_table": partial(run_command, ["netstat", "-r"]),
+        "self_diagnostic": self_diagnostic,
     },
     "linux": {
         "ping": partial(run_command, ["ping", "-c", "4"]),
@@ -120,13 +145,14 @@ TOOLS: Dict[str, Any] = {
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ip", "addr"]),
         "routing_table": partial(run_command, ["ip", "route", "show"]),
+        "self_diagnostic": self_diagnostic,
     },
 }.get(platform.system().lower(), {})
 
 # ...........................
 # TOOL DEFINITIONS for agent
 # ...........................
-TOOLS_DEF: List[FunctionToolParam] = [
+TOOLS_DEFS: List[FunctionToolParam] = [
     {
         "name": "ping",
         "type": "function",
@@ -195,6 +221,16 @@ TOOLS_DEF: List[FunctionToolParam] = [
         "name": "ports",
         "type": "function",
         "description": "Display all connections and listening ports in numerical form.",
+        "parameters": {
+            "type": "object",
+            "properties": {},
+        },
+        "strict": False,
+    },
+    {
+        "name": "self_diagnostic",
+        "type": "function",
+        "description": "A self-diagnostic tool that checks if all other tools are available.",
         "parameters": {
             "type": "object",
             "properties": {},
@@ -281,7 +317,7 @@ def run_agent() -> None:
             response: Response = client.responses.create(
                 model=MODEL,
                 input=input_queue,
-                tools=TOOLS_DEF,
+                tools=TOOLS_DEFS,
                 previous_response_id=last_response_id,
             )
             last_response_id = (

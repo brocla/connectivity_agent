@@ -52,7 +52,10 @@ If you're learning the Responses API or experimenting with AI agents that use mu
 \>> Are there any unexpected connections to external IP addresses?
 
 **Network Path Optimization**
-\>> Which endpoint has better routing from my location: https://www.nasa.gov or https://www.esa.int ?
+\>> Which endpoint has better routing from my location: `https://www.nasa.gov` or `https://www.esa.int` ?
+
+**Self Check**
+\>> Run a self-diagnostic.
 
 ## Requirements
 - Python 3.10 or higher
