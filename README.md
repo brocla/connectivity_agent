@@ -3,7 +3,7 @@
 A demonstration project showing how to build a multi-tool AI Agent using OpenAI’s **Responses API**. Although intended as an example, it also works amazingly well for network connectivity checking.
 
 ## Overview
-The agent runs in a terminal. It chooses which tools to run for your query, interprets their output, and explains results in plain language. 
+The agent runs in a terminal. It chooses which network tools to use for your query, interprets their output, and explains the results in plain language. 
 
 The included tools are:
 
@@ -17,7 +17,7 @@ The included tools are:
 ## Why This Example Might Be Useful
 If you're learning the Responses API or experimenting with AI agents that use multiple tools, this example shows a simple pattern without extra framework code. The source is in a single file. 
 
-It is also a pwerful diagnostic tool in its own right.
+It is also a powerful diagnostic tool in its own right.
 
 ## Example Queries
 
@@ -55,7 +55,7 @@ It is also a pwerful diagnostic tool in its own right.
 \>> Run a self-diagnostic.
 
 ## Requirements
-- Python 3.10 or higher
+- Python 3.9 or higher
 - OpenAI API Key
 
 ## Installation
