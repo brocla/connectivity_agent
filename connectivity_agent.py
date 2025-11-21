@@ -33,7 +33,7 @@ import subprocess
 from functools import partial
 from typing import List, Dict, Any
 from openai import OpenAI
-from openai.types.responses import Response, ResponseInputParam, ResponseOutputItem
+from openai.types.responses import Response, ResponseInputParam, ResponseOutputItem, ResponseFunctionToolCall
 from openai.types.responses.function_tool_param import FunctionToolParam
 
 # ...........................
@@ -276,7 +276,7 @@ def print_message(resp: ResponseOutputItem) -> None:
         print("\n🤖 Assistant:", msg_text)
 
 
-def get_call_params(resp: ResponseOutputItem) -> tuple[Tool_Name, Tool_Args]:
+def get_call_params(resp: ResponseFunctionToolCall) -> tuple[Tool_Name, Tool_Args]:
     """Extract tool name and arguments from a response output item."""
     tool_name = getattr(resp, "name", None)
     raw_args = getattr(resp, "arguments", "{}")
@@ -334,6 +334,7 @@ def run_agent() -> None:
 
                 # Call a tool for the agent
                 elif resp_type == "function_call":
+                    # print( "[DEBUG function_callcheck]:", resp)    
                     tool_name, args = get_call_params(resp)
 
                     # print(f"\n[DEBUG: Tool Call] {tool_name}({args})")
