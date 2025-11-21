@@ -104,14 +104,14 @@ TOOLS: Dict[str, Any] = {
         "ipconfig": partial(run_command, ["ipconfig"]),
         "routing_table": partial(run_command, ["netstat", "-r"]),
     },
-    "darwin": {
+    "darwin": { # macOS
         "ping": partial(run_command, ["ping", "-c", "4"]),
         "curl": partial(run_command, ["curl", "-I"]),
         "ports": partial(run_command, ["lsof", "-iTCP", "-n", "-P"]),
         "tracert": partial(run_command, ["traceroute", "-n", "-m", "8", "-w", "2"], timeout=15),
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ifconfig"]),
-        "routing_table": partial(run_command, ["netstat", "-r"]),
+        "routing_table": partial(run_command, ["route", "-n", "get", "default"]),
     },
     "linux": {
         "ping": partial(run_command, ["ping", "-c", "4"]),
@@ -238,7 +238,7 @@ def print_message(resp: ResponseOutputItem) -> None:
     content_list = getattr(resp, "content", [])
     if content_list and hasattr(content_list[0], "text"):
         msg_text = content_list[0].text
-        print("\n🤖 Assistant:", msg_text)
+        print("\n", msg_text)
 
 
 def get_call_params(resp: ResponseFunctionToolCall) -> tuple[Tool_Name, Tool_Args]:
@@ -266,10 +266,10 @@ def run_agent() -> None:
     )
     last_response_id = response.id
 
-    print("🤖 AI Connectivity Agent — type 'exit' to quit.\n")
+    print("\nChat -- AI Connectivity Agent")
 
     while True:
-        user_input = input(">>> ").strip()
+        user_input = input("\n🤖 > ").strip()
         if user_input.lower() in ["exit", "quit"]:
             break
 
