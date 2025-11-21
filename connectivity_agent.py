@@ -24,6 +24,7 @@ Then interact with the agent in the REPL:
     >>> How is the connection to google ?
     >>> Describe the connectivity to www.amazon.com. Be exhaustive.
     >>> Which of these AWS hosts has the better response time, https://s3.us-east-1.amazonaws.com or https://s3.us-west-1.amazonaws.com ?
+    >>> Run self-diagnostic.
     >>> exit
 """
 
@@ -90,29 +91,6 @@ def run_command(
         return error
 
 
-def self_diagnostic() -> Tool_Result:
-    """
-    A self-diagnostic tool that checks if all other tools are available.
-    """
-    diagnostics = {}
-    for tool_name, tool_func in TOOLS.items():
-        if tool_name == "self_diagnostic":
-            continue
-        [tool_def] = [td for td in TOOLS_DEFS if td["name"] == tool_name]
-        host_required = tool_def["parameters"].get("required", []) == ["host"] # type: ignore
-        try:
-            result = tool_func(host="example.com") if host_required else tool_func()
-            diagnostics[tool_name] = {
-                "available": True,
-                "test_result": result,
-            }
-        except Exception as e:
-            diagnostics[tool_name] = {
-                "available": False,
-                "error": str(e),
-            }
-    return diagnostics
-
 # .............................................
 # TOOL FUNCTIONS, mapped to their tool names, by operating system
 # .............................................
@@ -125,7 +103,6 @@ TOOLS: Dict[str, Any] = {
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ipconfig"]),
         "routing_table": partial(run_command, ["netstat", "-r"]),
-        "self_diagnostic": self_diagnostic,
     },
     "darwin": {
         "ping": partial(run_command, ["ping", "-c", "4"]),
@@ -135,7 +112,6 @@ TOOLS: Dict[str, Any] = {
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ifconfig"]),
         "routing_table": partial(run_command, ["netstat", "-r"]),
-        "self_diagnostic": self_diagnostic,
     },
     "linux": {
         "ping": partial(run_command, ["ping", "-c", "4"]),
@@ -145,7 +121,6 @@ TOOLS: Dict[str, Any] = {
         "nslookup": partial(run_command, ["nslookup"]),
         "ipconfig": partial(run_command, ["ip", "addr"]),
         "routing_table": partial(run_command, ["ip", "route", "show"]),
-        "self_diagnostic": self_diagnostic,
     },
 }.get(platform.system().lower(), {})
 
@@ -221,16 +196,6 @@ TOOLS_DEFS: List[FunctionToolParam] = [
         "name": "ports",
         "type": "function",
         "description": "Display all connections and listening ports in numerical form.",
-        "parameters": {
-            "type": "object",
-            "properties": {},
-        },
-        "strict": False,
-    },
-    {
-        "name": "self_diagnostic",
-        "type": "function",
-        "description": "A self-diagnostic tool that checks if all other tools are available.",
         "parameters": {
             "type": "object",
             "properties": {},
