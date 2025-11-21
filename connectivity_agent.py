@@ -266,7 +266,7 @@ def run_agent() -> None:
     )
     last_response_id = response.id
 
-    print("\nChat -- AI Connectivity Agent")
+    print("\nAI Connectivity Agent -- Ready to Chat!")
 
     while True:
         user_input = input("\n🤖 > ").strip()
