@@ -99,9 +99,9 @@ def self_diagnostic() -> Tool_Result:
         if tool_name == "self_diagnostic":
             continue
         [tool_def] = [td for td in TOOLS_DEFS if td["name"] == tool_name]
-        host_required = tool_def["parameters"].get("required", []) == ["host"]
+        host_required = tool_def["parameters"].get("required", []) == ["host"] # type: ignore
         try:
-            result = tool_func(host="localhost") if host_required else tool_func()
+            result = tool_func(host="example.com") if host_required else tool_func()
             diagnostics[tool_name] = {
                 "available": True,
                 "test_result": result,
