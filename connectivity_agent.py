@@ -31,7 +31,7 @@ import json
 import platform
 import subprocess
 from functools import partial
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Union
 from openai import OpenAI
 from openai.types.responses import Response, ResponseInputParam, ResponseOutputItem, ResponseFunctionToolCall
 from openai.types.responses.function_tool_param import FunctionToolParam
@@ -49,7 +49,7 @@ MODEL = "gpt-5.1"
 Message = Dict[str, Any]
 Tool_Result = Dict[str, Any]
 Tool_Args = Dict[str, Any]
-Tool_Name = str | None
+Tool_Name = Union[str, None]
 
 client = OpenAI()
 
@@ -58,7 +58,7 @@ client = OpenAI()
 # TOOL HELPER
 # ...........................
 def run_command(
-    func_call: List[str], host: str | None = None, timeout: int | None = None
+    func_call: List[str], host: Union[str, None] = None, timeout: Union[int, None] = None
 ) -> Tool_Result:
     """
     Run a command-line tool with optional host argument.
